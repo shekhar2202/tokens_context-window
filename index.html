@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Tokens & Context Window — AI Explainer</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #f5f5f0;
+      color: #1a1a1a;
+      min-height: 100vh;
+      padding: 2rem 1rem 3rem;
+    }
+
+    .wrap {
+      max-width: 680px;
+      margin: 0 auto;
+    }
+
+    /* ── Typography ── */
+    .pill-label {
+      display: inline-block;
+      font-size: 11px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase;
+      background: #efefef; color: #888;
+      border: 1px solid #e0e0e0;
+      border-radius: 999px; padding: 3px 10px; margin-bottom: 0.6rem;
+    }
+
+    .section-title {
+      font-size: 22px; font-weight: 600;
+      color: #1a1a1a; margin-bottom: 0.3rem;
+    }
+
+    .section-sub {
+      font-size: 14px; color: #555;
+      line-height: 1.65; margin-bottom: 1.5rem;
+    }
+
+    /* ── Cards ── */
+    .card {
+      background: #fff;
+      border: 1px solid #e0e0e0;
+      border-radius: 12px;
+      padding: 1.25rem 1.5rem;
+      margin-bottom: 1.25rem;
+    }
+
+    .card-head {
+      font-size: 14px; font-weight: 600;
+      color: #1a1a1a; margin-bottom: 8px;
+    }
+
+    .card-body {
+      font-size: 13px; color: #555;
+      line-height: 1.7;
+    }
+
+    /* ── Two-column grid ── */
+    .two-col {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      margin-bottom: 1.25rem;
+    }
+
+    @media (max-width: 500px) {
+      .two-col { grid-template-columns: 1fr; }
+    }
+
+    /* ── Analogy boxes ── */
+    .analogy-box {
+      background: #f9f9f7;
+      border-radius: 10px;
+      padding: 1rem 1.1rem;
+      font-size: 13px; color: #555;
+      line-height: 1.65;
+      border-left: 3px solid #5DCAA5;
+    }
+
+    .analogy-box.purple { border-left-color: #7F77DD; }
+
+    .analogy-box strong {
+      color: #1a1a1a; font-weight: 600;
+      display: block; margin-bottom: 4px;
+    }
+
+    /* ── Token example rows ── */
+    .example-row {
+      display: flex; align-items: center; flex-wrap: wrap; gap: 6px;
+      background: #f5f5f0;
+      border-radius: 8px;
+      padding: 0.75rem 1rem;
+      margin: 0.75rem 0;
+    }
+
+    .ex-label {
+      font-size: 11px; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.05em; color: #999;
+      width: 100%; margin-bottom: 6px;
+    }
+
+    .ex-token {
+      font-size: 12px; font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 6px;
+      border: 1px solid #5DCAA5;
+      background: #E1F5EE; color: #0F6E56;
+    }
+
+    .ex-token.sub {
+      background: #EEEDFE; color: #3C3489;
+      border-color: #AFA9EC;
+    }
+
+    .ex-count {
+      font-size: 12px; color: #999; margin-left: 6px;
+    }
+
+    /* ── Divider ── */
+    .divider {
+      border: none;
+      border-top: 1px solid #e8e8e8;
+      margin: 1.5rem 0;
+    }
+
+    /* ── Game labels ── */
+    .game-label {
+      font-size: 11px; font-weight: 600;
+      letter-spacing: 0.07em; text-transform: uppercase;
+      color: #999; margin-bottom: 0.5rem;
+    }
+
+    /* ── Step hint ── */
+    .step-hint {
+      font-size: 13px; color: #555;
+      line-height: 1.65;
+      padding: 0.75rem 1rem;
+      background: #f5f5f0;
+      border-radius: 8px;
+      margin-bottom: 1rem;
+    }
+
+    .step-hint b { color: #1a1a1a; }
+
+    /* ── Size buttons ── */
+    .size-btns { display: flex; gap: 6px; margin-bottom: 1rem; flex-wrap: wrap; }
+
+    .size-btn {
+      font-size: 12px; font-weight: 500;
+      padding: 5px 14px; border-radius: 999px;
+      border: 1px solid #d0d0d0;
+      background: #f5f5f5; color: #555;
+      cursor: pointer; transition: background 0.15s;
+    }
+
+    .size-btn:hover { background: #ebebeb; }
+
+    .size-btn.active {
+      background: #EEEDFE; color: #3C3489;
+      border-color: #AFA9EC;
+    }
+
+    /* ── Word buttons ── */
+    .word-btns { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 1rem; }
+
+    .word-btn {
+      font-size: 13px; font-weight: 500;
+      padding: 6px 14px; border-radius: 999px;
+      border: 1px solid #d0d0d0;
+      background: #f5f5f5; color: #1a1a1a;
+      cursor: pointer; transition: background 0.15s, transform 0.1s;
+    }
+
+    .word-btn:hover { background: #e8e8e8; }
+    .word-btn:active { transform: scale(0.96); }
+
+    /* ── Stats row ── */
+    .stats-row { display: flex; gap: 10px; margin-bottom: 0.75rem; }
+
+    .stat-box {
+      flex: 1; padding: 0.65rem 0.75rem;
+      background: #f5f5f0; border-radius: 8px;
+      text-align: center;
+    }
+
+    .stat-num { font-size: 22px; font-weight: 600; color: #1a1a1a; }
+    .stat-lbl { font-size: 11px; color: #999; margin-top: 2px; }
+
+    /* ── Progress bar ── */
+    .bar-track {
+      height: 8px; border-radius: 999px;
+      background: #eee; overflow: hidden;
+      margin-bottom: 0.75rem;
+    }
+
+    .bar-fill {
+      height: 100%; border-radius: 999px;
+      background: #1D9E75;
+      transition: width 0.3s, background 0.3s;
+    }
+
+    .bar-fill.warn { background: #BA7517; }
+    .bar-fill.full { background: #E24B4A; }
+
+    /* ── Memory zone ── */
+    .memory-zone {
+      min-height: 64px;
+      display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-start;
+      padding: 0.75rem;
+      background: #f5f5f0; border-radius: 8px;
+      margin-bottom: 0.75rem;
+    }
+
+    /* ── Token boxes ── */
+    .token-box {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 5px 12px;
+      background: #E1F5EE; color: #0F6E56;
+      border: 1px solid #5DCAA5;
+      border-radius: 8px; font-size: 13px; font-weight: 500;
+      animation: popIn 0.22s ease;
+    }
+
+    .token-box .t-num {
+      font-size: 10px; color: #1D9E75; font-weight: 400;
+    }
+
+    /* Fade-out animation when oldest token is removed */
+    .token-box.fading {
+      animation: fadeOut 0.35s ease forwards;
+    }
+
+    @keyframes popIn {
+      from { opacity: 0; transform: scale(0.78); }
+      to   { opacity: 1; transform: scale(1); }
+    }
+
+    @keyframes fadeOut {
+      to { opacity: 0; transform: translateX(-12px) scale(0.82); }
+    }
+
+    .empty-hint {
+      font-size: 13px; color: #bbb; font-style: italic;
+    }
+
+    /* ── Event log ── */
+    .event-log {
+      font-size: 12px; color: #555;
+      min-height: 22px; line-height: 1.6;
+      padding: 0.5rem 0.75rem;
+      border-radius: 8px;
+      border: 1px solid #e8e8e8;
+      background: #fff;
+      margin-bottom: 0.75rem;
+    }
+
+    .ev-remove { color: #993C1D; font-weight: 600; }
+    .ev-ok     { color: #0F6E56; font-weight: 600; }
+    .ev-warn   { color: #854F0B; font-weight: 600; }
+
+    /* ── Reset button ── */
+    .reset-btn {
+      font-size: 12px; font-weight: 500;
+      padding: 5px 16px; border-radius: 999px;
+      border: 1px solid #d0d0d0;
+      background: transparent; color: #666;
+      cursor: pointer; transition: background 0.15s;
+    }
+
+    .reset-btn:hover { background: #f0f0f0; }
+
+    /* ── Insight box ── */
+    .insight {
+      font-size: 13px; color: #555;
+      padding: 1rem 1.1rem;
+      border-radius: 10px;
+      background: #f9f9f7;
+      border-left: 3px solid #7F77DD;
+      line-height: 1.7;
+      margin-top: 0.5rem;
+    }
+
+    .insight b { color: #1a1a1a; }
+  </style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- ── Header ── -->
+  <div class="pill-label">How AI reads text</div>
+  <div class="section-title">Tokens &amp; Context Window</div>
+  <div class="section-sub">Two foundational ideas behind every AI language model. Understanding these helps you use AI tools far more effectively.</div>
+
+  <!-- ── Concept cards ── -->
+  <div class="two-col">
+    <div class="card">
+      <div class="card-head">What is a token?</div>
+      <div class="card-body">
+        A token is the smallest unit of text an AI processes. Think of it like how a reader doesn't see letters — they see word-chunks. AI splits your input into these chunks before doing anything with it.
+        <br><br>
+        A token is usually a word, but common words like "the" may be a single token, while longer or rarer words like "unbelievable" might split into 2–3 tokens: <em>un</em>, <em>believ</em>, <em>able</em>.
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-head">What is a context window?</div>
+      <div class="card-body">
+        The context window is the AI's active memory — the total tokens it can hold and reason over at once. Everything outside this window is invisible to the model.
+        <br><br>
+        If a conversation grows longer than the window, the AI cannot "see" what was said earlier. It doesn't forget — those tokens were simply never shown to it again.
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Tokenization example ── -->
+  <div class="card">
+    <div class="card-head">How text becomes tokens — a real example</div>
+    <div class="card-body">Every sentence you type is split before the AI reads it. Here's what that looks like:</div>
+
+    <div class="example-row">
+      <span class="ex-label">Sentence: "I love building AI apps"</span>
+      <span class="ex-token">I</span>
+      <span class="ex-token">love</span>
+      <span class="ex-token">building</span>
+      <span class="ex-token">AI</span>
+      <span class="ex-token">apps</span>
+      <span class="ex-count">= 5 tokens</span>
+    </div>
+
+    <div class="example-row">
+      <span class="ex-label">Single word "unbelievable" — split into sub-word tokens</span>
+      <span class="ex-token sub">un</span>
+      <span class="ex-token sub">believ</span>
+      <span class="ex-token sub">able</span>
+      <span class="ex-count">= 3 tokens</span>
+    </div>
+
+    <div class="card-body" style="margin-top:0.75rem;">
+      Tokens also include spaces and punctuation. On average, <strong>1 token ≈ 0.75 English words</strong>, so 1,000 words ≈ 1,300 tokens. This is how AI providers measure and price usage.
+    </div>
+  </div>
+
+  <!-- ── Analogies ── -->
+  <div class="two-col">
+    <div class="analogy-box">
+      <strong>Token analogy</strong>
+      Imagine reading a book, but you can only read in syllable-sized bites. "Saturday" becomes "Sat-ur-day". That's how AI reads — in token-sized bites, not whole sentences at once.
+    </div>
+    <div class="analogy-box purple">
+      <strong>Context window analogy</strong>
+      Imagine a sticky note with room for only 10 words. As you write more, older words fall off the top. The AI only knows what's on the note right now — nothing more.
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- ── Interactive game ── -->
+  <div class="pill-label">Interactive demo</div>
+  <div class="section-title" style="margin-bottom:0.5rem;">Build a sentence, fill the memory</div>
+
+  <div class="card">
+
+    <div class="step-hint">
+      <b>How to play:</b> Click words below to add them to the AI's memory (context window). Watch what happens when memory fills up — older tokens get pushed out automatically, just like a real AI model. Try different window sizes to feel the difference.
+    </div>
+
+    <!-- Window size selector -->
+    <div class="game-label">Choose your context window size</div>
+    <div class="size-btns" id="sizeBtns">
+      <button class="size-btn" data-size="3">3 tokens — tiny</button>
+      <button class="size-btn active" data-size="5">5 tokens — small</button>
+      <button class="size-btn" data-size="8">8 tokens — larger</button>
+    </div>
+
+    <!-- Word buttons -->
+    <div class="game-label">Click words to add tokens</div>
+    <div class="word-btns" id="wordBtns"></div>
+
+    <!-- Stats -->
+    <div class="stats-row">
+      <div class="stat-box">
+        <div class="stat-num" id="statUsed">0</div>
+        <div class="stat-lbl">tokens in memory</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-num" id="statMax">5</div>
+        <div class="stat-lbl">window size</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-num" id="statDropped">0</div>
+        <div class="stat-lbl">tokens dropped</div>
+      </div>
+    </div>
+
+    <!-- Progress bar -->
+    <div class="bar-track">
+      <div class="bar-fill" id="barFill" style="width:0%"></div>
+    </div>
+
+    <!-- Memory zone -->
+    <div class="game-label">Memory zone (context window)</div>
+    <div class="memory-zone" id="memZone">
+      <span class="empty-hint" id="emptyHint">Nothing in memory yet — add some tokens above</span>
+    </div>
+
+    <!-- Event log -->
+    <div class="event-log" id="eventLog">
+      <span style="color:#bbb;">Events will appear here as you play...</span>
+    </div>
+
+    <!-- Reset -->
+    <button class="reset-btn" id="resetBtn">Clear memory</button>
+  </div>
+
+  <!-- ── Real-world insight ── -->
+  <div class="insight">
+    <b>Why this matters in real AI:</b> GPT-4 has a ~128,000 token context window. Claude has up to 200,000 tokens. When you have a very long conversation or upload a large document, the AI may lose track of things said early on — not because it's forgetful, but because those tokens literally left the window. This is why summarizing long chats or breaking large tasks into smaller parts helps AI perform better.
+  </div>
+
+</div>
+
+<script>
+  /* ── Config ── */
+  const WORDS = [
+    "The","quick","brown","fox","jumps","over","lazy","dog",
+    "I","love","building","AI","apps","is","very","cool",
+    "fast","smart","learns","reads"
+  ];
+
+  /* ── State ── */
+  let MAX = 5;
+  let tokens = [];
+  let totalDropped = 0;
+
+  /* ── DOM refs ── */
+  const memZone   = document.getElementById('memZone');
+  const emptyHint = document.getElementById('emptyHint');
+  const barFill   = document.getElementById('barFill');
+  const eventLog  = document.getElementById('eventLog');
+  const statUsed  = document.getElementById('statUsed');
+  const statMax   = document.getElementById('statMax');
+  const statDrop  = document.getElementById('statDropped');
+
+  /* ── Build word buttons ── */
+  function buildWordBtns() {
+    const container = document.getElementById('wordBtns');
+    container.innerHTML = '';
+    WORDS.forEach(word => {
+      const btn = document.createElement('button');
+      btn.className = 'word-btn';
+      btn.textContent = word;
+      btn.onclick = () => addToken(word);
+      container.appendChild(btn);
+    });
+  }
+  buildWordBtns();
+
+  /* ── Window size buttons ── */
+  document.getElementById('sizeBtns').querySelectorAll('.size-btn').forEach(btn => {
+    btn.onclick = () => {
+      document.querySelectorAll('.size-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      MAX = parseInt(btn.dataset.size);
+      statMax.textContent = MAX;
+      resetAll();
+      setLog('<span class="ev-ok">Context window resized to ' + MAX + ' tokens. Memory cleared.</span>');
+    };
+  });
+
+  /* ── Add a token ── */
+  function addToken(word) {
+    let msg = '';
+
+    // If at limit, remove the oldest token first
+    if (tokens.length >= MAX) {
+      const removed = tokens.shift();
+      const oldest = memZone.querySelector('.token-box');
+      if (oldest) {
+        oldest.classList.add('fading');
+        setTimeout(() => oldest.remove(), 340);
+      }
+      totalDropped++;
+      statDrop.textContent = totalDropped;
+      msg = '<span class="ev-remove">Window full — "' + removed + '" was dropped. The AI can no longer see it.</span>';
+    } else {
+      msg = '<span class="ev-ok">Added "' + word + '" to memory.</span>';
+    }
+
+    tokens.push(word);
+    emptyHint.style.display = 'none';
+
+    // Build token box
+    const box = document.createElement('div');
+    box.className = 'token-box';
+
+    const num = document.createElement('span');
+    num.className = 't-num';
+    num.textContent = '#' + tokens.length;
+    box.appendChild(num);
+    box.appendChild(document.createTextNode(' ' + word));
+    memZone.appendChild(box);
+
+    updateStats();
+    setLog(msg);
+
+    // Warn when full but nothing dropped yet
+    if (tokens.length === MAX && totalDropped === 0) {
+      setLog('<span class="ev-warn">Memory is full! Add another token and the oldest one will be removed — just like a real AI.</span>');
+    }
+  }
+
+  /* ── Update progress bar and counters ── */
+  function updateStats() {
+    const n = tokens.length;
+    statUsed.textContent = n;
+
+    const pct = (n / MAX) * 100;
+    barFill.style.width = pct + '%';
+    barFill.classList.remove('warn', 'full');
+    if (n === MAX) barFill.classList.add('full');
+    else if (n >= MAX * 0.6) barFill.classList.add('warn');
+  }
+
+  /* ── Set event log message ── */
+  function setLog(html) { eventLog.innerHTML = html; }
+
+  /* ── Reset everything ── */
+  function resetAll() {
+    tokens = [];
+    totalDropped = 0;
+    memZone.innerHTML = '';
+    memZone.appendChild(emptyHint);
+    emptyHint.style.display = '';
+    statUsed.textContent = '0';
+    statDrop.textContent = '0';
+    barFill.style.width = '0%';
+    barFill.classList.remove('warn', 'full');
+  }
+
+  document.getElementById('resetBtn').onclick = () => {
+    resetAll();
+    setLog('<span style="color:#bbb">Memory cleared. Start fresh.</span>');
+  };
+</script>
+</body>
+</html>
